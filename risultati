@@ -1,0 +1,26 @@
+Matches coppia 1-2:  3410						# Match trovati con FLANN per le immagini con rumore gaussiano
+Matches coppia 2-3:  3382
+Matches coppia 3-4:  3388
+
+
+Numero di matches filtrati tra immagine 1 e immagine 2: 1334		# Match delle immagini con  rumore ma filtrate secondo la soglia T2
+Numero di matches filtrati tra immagine 2 e immagine 3: 2127
+Numero di matches filtrati tra immagine 3 e immagine 4: 1306
+
+
+Matches coppia 1-2:  3597						# Match trovati con FLANN per le immagini senza rumore gaussiano
+Matches coppia 2-3:  3529
+Matches coppia 3-4:  3610
+
+
+Numero Pixel filtrati per distanza della coppia 1:  84				# si è calcolato il numero di pixel totali ottenuti filtrando la distanza (ottenuta - desiderata) secondo la soglia T1
+Media distanza filtrata tra pixel della coppia 1:  0.45822416494147417		# la media delle distanze tra i pixel al di sotto della soglia T1
+Distanza media tra pixel non filtrata della coppia 1:  176.3262685891366 	# media delle distanze tra pixel prima di applicare la soglia T1 
+
+Numero Pixel filtrati per distanza della coppia 2:  1966
+Media distanza filtrata tra pixel della coppia 2:  0.7260543339030351
+Distanza media tra pixel non filtrata della coppia 2:  32.07619052590627 
+
+Numero Pixel filtrati per distanza della coppia 3:  95
+Media distanza filtrata tra pixel della coppia 3:  0.5045343769982266
+Distanza media tra pixel non filtrata della coppia 3:  174.11123082310183 
