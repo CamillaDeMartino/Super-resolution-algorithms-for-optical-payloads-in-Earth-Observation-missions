@@ -182,3 +182,110 @@ def mapping(images_lr, M):
     # Ora hr_image contiene l'immagine HR risultante
     return hr_image
 """
+
+
+import numpy as np
+
+
+
+
+# Matrice 1
+matrice1 = np.array([[1, 2],
+                    [3, 4]])
+
+# Matrice 2
+matrice2 = np.array([[5, 6],
+                    [7, 8]])
+
+matrice3 = np.array([[9, 10], 
+                     [11, 12]])
+
+matrice4 = np.array([[13, 14], 
+                     [15, 16]])
+
+# Stampa delle matrici
+print("Matrice 1:")
+print(matrice1)
+print("\nMatrice 2:")
+print(matrice2)
+print("\nMatrice 3:")
+print(matrice3)
+print("\nMatrice 4:")
+print(matrice4)
+
+"""# Matrice 1 4x4
+matrice1 = np.array([[1, 2, 3, 4],
+                    [5, 6, 7, 8],
+                    [9, 10, 11, 12],
+                    [13, 14, 15, 16]])
+
+# Matrice 2 4x4
+matrice2 = np.array([[17, 18, 19, 20],
+                    [21, 22, 23, 24],
+                    [25, 26, 27, 28],
+                    [29, 30, 31, 32]])"""
+
+
+            
+
+#Sovrapposizione a partire dalla metà della prima casella
+riga_di_partenza = matrice1.shape[0] // 2
+colonna_di_partenza = matrice1.shape[1] // 2
+
+
+# Dimensioni della matrice sovrapposta
+righe_sovrapposte = matrice1.shape[0] * 2 + 1
+colonne_sovrapposte = matrice1.shape[1] * 2 + 1
+
+# Creazione della matrice sovrapposta con zeri
+matrice_sovrapposta = np.zeros((righe_sovrapposte, colonne_sovrapposte))
+
+#Sovrapponi ma matrice 1 con la 2 e somma i valori sovrapposti
+"""for i in range(righe_sovrapposte):
+    for j in range(colonne_sovrapposte+1):
+        if j == 0:
+            matrice_sovrapposta[i, j] = matrice1[i, j // 2] / 2
+        elif j == colonne_sovrapposte:
+            matrice_sovrapposta[i, j] = matrice2[i, (j-1) // 2] / 2
+        else:
+            matrice_sovrapposta[i, j] = matrice2[i, (j-1) // 2] / 2 + matrice1[i, j // 2] / 2
+"""
+    
+for i in range(righe_sovrapposte):
+    for j in range(colonne_sovrapposte):
+        if i == 0 and j == 0:
+            matrice_sovrapposta[i, j] = matrice1[i // 2, j // 2] / 4
+        elif i == 0 and j == colonne_sovrapposte-1:
+            matrice_sovrapposta[i, j] = matrice2[i, (j-1) // 2] / 4 
+        elif i == righe_sovrapposte -1 and j == colonne_sovrapposte-1:
+            matrice_sovrapposta[i, j] = matrice4[(i-1) // 2, (j-1) // 2] / 4
+        elif i == righe_sovrapposte-1 and j == 0:
+            matrice_sovrapposta[i, j] = matrice3[(i-1) // 2, j // 2] / 4
+        elif i == 0:
+            matrice_sovrapposta[i, j] = matrice1[i// 2, (j-1) // 2] / 4 + matrice2[i // 2, j // 2] / 4
+        elif j == 0:
+            matrice_sovrapposta[i, j] = matrice1[(i-1)// 2, j// 2] / 4 + matrice3[i // 2, j // 2] / 4
+        elif j == colonne_sovrapposte-1:
+            matrice_sovrapposta[i, j] = matrice2[i // 2, (j-1) // 2] / 4 + matrice4[(i-1) // 2, (j-1) // 2] / 4
+        elif i == righe_sovrapposte-1:
+            matrice_sovrapposta[i, j] = matrice3[(i-1) // 2, j // 2] / 4 + matrice4[(i-1) // 2, (j-1) // 2] / 4
+        else:
+            matrice_sovrapposta[i, j] = matrice1[i//2, j // 2] / 4 + matrice2[i // 2, (j-1) // 2] / 4 + matrice3[(i-1) // 2, j // 2] / 4 + matrice4[(i-1)//2, (j-1) // 2] / 4
+
+
+
+#Crea matrice finale HR:
+HR = np.zeros((righe_sovrapposte -1, colonne_sovrapposte-1))
+for i in range(righe_sovrapposte-1):
+    for j in range(colonne_sovrapposte-1):
+        HR[i, j] = (matrice_sovrapposta[i, j] + matrice_sovrapposta[i, j+1] + matrice_sovrapposta[i+1, j] + matrice_sovrapposta[i+1, j+1])/4
+
+
+
+
+print("\nMatrice Sovrapposta:")
+print(matrice_sovrapposta)
+
+print("\nMatrice HR:")
+print(HR)
+
