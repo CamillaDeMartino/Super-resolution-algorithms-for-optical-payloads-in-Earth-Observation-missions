@@ -250,7 +250,7 @@ def map_images(image_lr, shift_x, shift_y, hr_size):
     return mapped_image_hr
 
 
-def mapping(images_lr, M):
+def mapping2(images_lr, M):
 
     # Inizializza la griglia HR
     hr_height = images_lr[0].shape[0] 
@@ -282,14 +282,55 @@ def mapping(images_lr, M):
     for hr_image in hr_images:
         grid += hr_image
 
-    return grid/len(hr_images)
+    #return grid/len(hr_images)
+    return grid
+
+def mapping(images):
+    #Sovrapposizione a partire dalla metà della prima casella
+    riga_di_partenza = images[0].shape[0] // 2
+    colonna_di_partenza = images[0].shape[1] // 2
 
 
+    # Dimensioni della matrice sovrapposta
+    righe_sovrapposte = images[0].shape[0] * 2 + 1
+    colonne_sovrapposte = images[0].shape[1] * 2 + 1
 
-def gridHR(image):
+    # Creazione della matrice sovrapposta con zeri
+    matrice_sovrapposta = np.zeros((righe_sovrapposte, colonne_sovrapposte))
+
+    matrice1 = images[0]
+    matrice2 = images[1]
+    matrice3 = images[2]
+    matrice4 = images[3]
+
+    for i in range(righe_sovrapposte):
+        for j in range(colonne_sovrapposte):
+            if i == 0 and j == 0:
+                matrice_sovrapposta[i, j] = np.squeeze(matrice1[i // 2, j // 2]) / 4
+            elif i == 0 and j == colonne_sovrapposte-1:
+                matrice_sovrapposta[i, j] = np.squeeze(matrice2[i, (j-1) // 2]) / 4 
+            elif i == righe_sovrapposte -1 and j == colonne_sovrapposte-1:
+                matrice_sovrapposta[i, j] = np.squeeze(matrice4[(i-1) // 2, (j-1) // 2]) / 4
+            elif i == righe_sovrapposte-1 and j == 0:
+                matrice_sovrapposta[i, j] = np.squeeze(matrice3[(i-1) // 2, j // 2]) / 4
+            elif i == 0:
+                matrice_sovrapposta[i, j] = np.squeeze(matrice1[i// 2, (j-1) // 2]) / 4 + np.squeeze(matrice2[i // 2, j // 2]) / 4
+            elif j == 0:
+                matrice_sovrapposta[i, j] = np.squeeze(matrice1[(i-1)// 2, j// 2]) / 4 + np.squeeze(matrice3[i // 2, j // 2]) / 4
+            elif j == colonne_sovrapposte-1:
+                matrice_sovrapposta[i, j] = np.squeeze(matrice2[i // 2, (j-1) // 2]) / 4 + np.squeeze(matrice4[(i-1) // 2, (j-1) // 2]) / 4
+            elif i == righe_sovrapposte-1:
+                matrice_sovrapposta[i, j] = np.squeeze(matrice3[(i-1) // 2, j // 2]) / 4 + np.squeeze(matrice4[(i-1) // 2, (j-1) // 2]) / 4
+            else:
+                matrice_sovrapposta[i, j] = np.squeeze(matrice1[i//2, j // 2]) / 4 + np.squeeze(matrice2[i // 2, (j-1) // 2]) / 4 + np.squeeze(matrice3[(i-1) // 2, j // 2]) / 4 + np.squeeze(matrice4[(i-1)//2, (j-1) // 2]) / 4
+            
+    return matrice_sovrapposta
+
+
+"""
+def gridHR2(image):
     # Taglia l'immagine di sovrapposizione
     overlapped_image = image[1:image.shape[0], 1:image.shape[1]]
-
 
     # Dimensioni dell'immagine HR risultante
     hr_width = 768
@@ -313,6 +354,21 @@ def gridHR(image):
 
     # Ora hr_image contiene l'immagine HR risultante
     return hr_image
+"""
+
+def gridHR(matrice_sovrapposta):
+
+    # Dimensioni della matrice sovrapposta
+    righe_sovrapposte = matrice_sovrapposta.shape[0] 
+    colonne_sovrapposte = matrice_sovrapposta.shape[1]
+
+    #Crea matrice finale HR:
+    HR = np.zeros((righe_sovrapposte -1, colonne_sovrapposte-1))
+    for i in range(righe_sovrapposte-1):
+        for j in range(colonne_sovrapposte-1):
+            HR[i, j] = (matrice_sovrapposta[i, j] + matrice_sovrapposta[i, j+1] + matrice_sovrapposta[i+1, j] + matrice_sovrapposta[i+1, j+1])/4
+
+    return HR
 
 
 # IMAGES SELECTION BASED ON SFME -------------------------------------------------------------------------------------------------
@@ -429,11 +485,19 @@ print("\n")
 #filter_distance(images_lr)
 
 #MULTI-FRAME IMAGES RECONSTRUCTION ----------------------------------------------------------------------------------------
+for i, image in enumerate(noisy_images_lr):
+    print(image[0][0])
 
+image = mapping(noisy_images_lr)
+print(image[0][0])
+print(image[0][1])
+print(image[1][0])
+print(image[1][1])
 
-image = mapping(noisy_images_lr, M)
 result_image = gridHR(image)
-print("Size: ", result_image.shape)
+print("\n", result_image[0][0]) 
+
+
 cv2.imwrite('immagine_risultante.png', result_image)
 
 # Visualizza l'immagine
