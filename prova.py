@@ -237,7 +237,7 @@ def calculate_distance(keypoints1, keypoints2, matches):
     
     return filter_distances, distances
 
-
+"""
 def map_images(image_lr, shift_x, shift_y, hr_size):
 
     # Creazione della matrice di trasformazione per warpAffine
@@ -283,7 +283,7 @@ def mapping2(images_lr, M):
         grid += hr_image
 
     #return grid/len(hr_images)
-    return grid
+    return grid"""
 
 def mapping(images):
     #Sovrapposizione a partire dalla metà della prima casella
@@ -303,27 +303,28 @@ def mapping(images):
     matrice3 = images[2]
     matrice4 = images[3]
 
+
     for i in range(righe_sovrapposte):
         for j in range(colonne_sovrapposte):
             if i == 0 and j == 0:
-                matrice_sovrapposta[i, j] = np.squeeze(matrice1[i // 2, j // 2]) / 4
+                matrice_sovrapposta[i, j] = np.squeeze(matrice1[i // 2, j // 2])
             elif i == 0 and j == colonne_sovrapposte-1:
-                matrice_sovrapposta[i, j] = np.squeeze(matrice2[i, (j-1) // 2]) / 4 
+                matrice_sovrapposta[i, j] = np.squeeze(matrice2[i, (j-1) // 2]) 
             elif i == righe_sovrapposte -1 and j == colonne_sovrapposte-1:
-                matrice_sovrapposta[i, j] = np.squeeze(matrice4[(i-1) // 2, (j-1) // 2]) / 4
+                matrice_sovrapposta[i, j] = np.squeeze(matrice4[(i-1) // 2, (j-1) // 2]) 
             elif i == righe_sovrapposte-1 and j == 0:
-                matrice_sovrapposta[i, j] = np.squeeze(matrice3[(i-1) // 2, j // 2]) / 4
+                matrice_sovrapposta[i, j] = np.squeeze(matrice3[(i-1) // 2, j // 2])
             elif i == 0:
-                matrice_sovrapposta[i, j] = np.squeeze(matrice1[i// 2, (j-1) // 2]) / 4 + np.squeeze(matrice2[i // 2, j // 2]) / 4
+                matrice_sovrapposta[i, j] = np.sum([matrice1[i// 2, (j-1) // 2], matrice2[i // 2, j // 2]])
             elif j == 0:
-                matrice_sovrapposta[i, j] = np.squeeze(matrice1[(i-1)// 2, j// 2]) / 4 + np.squeeze(matrice3[i // 2, j // 2]) / 4
+                matrice_sovrapposta[i, j] = np.sum([matrice1[(i-1)// 2, j// 2], matrice3[i // 2, j // 2]])
             elif j == colonne_sovrapposte-1:
-                matrice_sovrapposta[i, j] = np.squeeze(matrice2[i // 2, (j-1) // 2]) / 4 + np.squeeze(matrice4[(i-1) // 2, (j-1) // 2]) / 4
+                matrice_sovrapposta[i, j] = np.sum([matrice2[i // 2, (j-1) // 2], matrice4[(i-1) // 2, (j-1) // 2]]) 
             elif i == righe_sovrapposte-1:
-                matrice_sovrapposta[i, j] = np.squeeze(matrice3[(i-1) // 2, j // 2]) / 4 + np.squeeze(matrice4[(i-1) // 2, (j-1) // 2]) / 4
+                matrice_sovrapposta[i, j] = np.sum([matrice3[(i-1) // 2, j // 2], matrice4[(i-1) // 2, (j-1) // 2]])
             else:
-                matrice_sovrapposta[i, j] = np.squeeze(matrice1[i//2, j // 2]) / 4 + np.squeeze(matrice2[i // 2, (j-1) // 2]) / 4 + np.squeeze(matrice3[(i-1) // 2, j // 2]) / 4 + np.squeeze(matrice4[(i-1)//2, (j-1) // 2]) / 4
-            
+                matrice_sovrapposta[i, j] = np.sum([matrice1[i//2, j // 2], matrice2[i // 2, (j-1) // 2], matrice3[(i-1) // 2, j // 2], matrice4[(i-1)//2, (j-1) // 2]])
+
     return matrice_sovrapposta
 
 
@@ -366,9 +367,17 @@ def gridHR(matrice_sovrapposta):
     HR = np.zeros((righe_sovrapposte -1, colonne_sovrapposte-1))
     for i in range(righe_sovrapposte-1):
         for j in range(colonne_sovrapposte-1):
-            HR[i, j] = (matrice_sovrapposta[i, j] + matrice_sovrapposta[i, j+1] + matrice_sovrapposta[i+1, j] + matrice_sovrapposta[i+1, j+1])/4
+            HR[i, j] = (matrice_sovrapposta[i+1, j+1])/4
 
     return HR
+
+
+
+
+
+
+
+
 
 
 # IMAGES SELECTION BASED ON SFME -------------------------------------------------------------------------------------------------
@@ -470,8 +479,8 @@ for i, matches in enumerate(matches_flann):
 
         filter_distances, distances = calculate_distance(keypoints1, keypoints2, matches)
         distances_images.append(filter_distances)
-        
         total_distances.append(distances)
+
         print(f"Numero Pixel filtrati per distanza della coppia {i+1}: ", len(distances_images[i]))
         print(f"Distanza media filtrata tra pixel della coppia {i+1}: ", np.mean(distances_images[i]))
         print(f"Distanza media tra pixel non filtrata della coppia {i+1}: ", np.mean(total_distances[i]), "\n")
@@ -482,6 +491,7 @@ for i, matches in enumerate(matches_flann):
         plt.show()
 
 print("\n")
+
 #filter_distance(images_lr)
 
 #MULTI-FRAME IMAGES RECONSTRUCTION ----------------------------------------------------------------------------------------
@@ -489,13 +499,12 @@ for i, image in enumerate(noisy_images_lr):
     print(image[0][0])
 
 image = mapping(noisy_images_lr)
-print(image[0][0])
-print(image[0][1])
-print(image[1][0])
 print(image[1][1])
+
 
 result_image = gridHR(image)
 print("\n", result_image[0][0]) 
+print("\nShape: ", result_image.shape) 
 
 
 cv2.imwrite('immagine_risultante.png', result_image)

@@ -1,1 +1,3 @@
 conda install -c conda-forge opencv
+pip install pylops
+conda install conda-forge::fftw
