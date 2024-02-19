@@ -1,0 +1,23 @@
+contourpy==1.2.0
+curvelops @ git+https://github.com/PyLops/curvelops@c2baaa7bafaf2f8973e9eb9c6612402493411fec
+cycler==0.12.1
+fonttools==4.44.0
+imutils==0.5.4
+kiwisolver==1.4.5
+matplotlib==3.8.1
+numpy @ file:///home/conda/feedstock_root/build_artifacts/numpy_1695290877801/work/dist/numpy-1.26.0-cp312-cp312-linux_x86_64.whl#sha256=5d72bdb2f53483ad66a7d9238f7140adafc56f4764b117e3314ca517bd4e4400
+opencv-python==4.8.1
+packaging==23.2
+Pillow==10.1.0
+pylops @ file:///home/conda/feedstock_root/build_artifacts/pylops_1700145483256/work
+pyparsing==3.1.1
+PyQt5==5.15.10
+PyQt5-Qt5==5.15.2
+PyQt5-sip==12.13.0
+python-dateutil==2.8.2
+scipy==1.12.0
+setuptools==68.2.2
+shiboken2==5.13.2
+six==1.16.0
+Wand==0.6.13
+wheel==0.41.2

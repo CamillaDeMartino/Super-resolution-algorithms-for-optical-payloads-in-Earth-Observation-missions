@@ -4,7 +4,7 @@ import imutils
 from matplotlib import pyplot as plt
 from curvelops import FDCT2D
 from curvelops.plot import curveshow
-from  
+
 
 #A - Campionamento Quincunx 
 def quincunx_sampling(image):
@@ -168,18 +168,28 @@ plt.show()
 
 
 
-# Calcola la trasformata curvelet
-fdct = FDCT2D(n, n, 3, 4)  # Numero di scale e angoli
-curvelet_coeffs = fdct.forward(image)
+# Calcola la trasformata curvelet discreta
+nbscales = 6
+nbangles_coarse = 16
+# Definisci la trasformata delle curvelet (FDCT) in base alle dimensioni dell'immagine HR_upsampling
+FDCT = FDCT2D(dims=HR_upsampling.shape, nbscales=6, nbangles_coarse=16, allcurvelets=True)
 
-# Visualizza i coefficienti della trasformata curvelet
-plt.figure(figsize=(12, 6))
-plt.subplot(1, 2, 1)
-plt.imshow(image, cmap='gray')
-plt.title('Immagine originale')
-plt.colorbar()
-plt.subplot(1, 2, 2)
-curveshow(curvelet_coeffs)
-plt.title('Coefficienti della trasformata curvelet')
-plt.colorbar()
-plt.show()
+# Applica la trasformata delle curvelet all'immagine HR_upsampling
+# restituendo i coefficienti della trasformata.
+c = FDCT @ HR_upsampling
+
+print("Coefff", c.shape)
+
+# Calcola l'inversa della trasformata delle curvelet per ricostruire l'immagine originale
+FDCT_inv = FDCT.H @ c
+
+# Verifica che l'immagine originale e quella ricostruita siano simili entro una certa tolleranza
+#np.testing.assert_allclose(HR_upsampling, FDCT_inv, rtol=1e-6, atol=1e-8)
+#np.testing.assert_allclose(HR_upsampling, FDCT_inv)
+
+# Calcola l'errore quadratico medio (RMSE)
+rmse = np.sqrt(np.mean((HR_upsampling - FDCT_inv)**2))
+
+# Stampa il RMSE
+print("RMSE:", rmse)
+
