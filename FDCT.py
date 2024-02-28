@@ -4,7 +4,7 @@ from curvelops import FDCT2D
 from curvelops.plot import curveshow
 from matplotlib import pyplot as plt
 
-# Carica l'immagine del logo Python in scala di grigi
+# Carica l'immagine in scala di grigi
 logo = cv2.imread("area_centrale.png", cv2.IMREAD_GRAYSCALE)
 
 logo_gray = logo.swapaxes(0, 1)
@@ -19,7 +19,7 @@ print("Img dims: ", logo_gray.shape)
 logo_gray = logo_gray.astype(float) / 255.0
 
 # Applica la trasformata di curvelet 2D all'immagine
-C2D = FDCT2D(logo_gray.shape, nbscales=4, nbangles_coarse=16, allcurvelets=True)
+C2D = FDCT2D(logo_gray.shape, nbscales=4, nbangles_coarse=4, allcurvelets=False)
 
 # Estrai i coefficienti di curvelet
 logo_c = C2D.struct(C2D @ logo_gray)
@@ -33,25 +33,7 @@ print("Dims quarta matrice: ", logo_c[3][0].shape)
 
 print("Angles: ", len(logo_c[3]))
 
-# Visualizza la parte reale dell'array
-plt.imshow(logo_c[3][0].real, cmap='gray')
-plt.colorbar()
-plt.title('Parte Reale dell Ultima Matrice')
-plt.show()
-
-# Visualizza la parte immaginaria dell'array
-plt.imshow(logo_c[3][0].imag, cmap='gray')
-plt.colorbar()
-plt.title('Parte Immaginaria dell Ultima Matrice')
-plt.show()
-
-# Visualizza la magnitudine dell'array complesso
-magnitude = np.abs(logo_c[3][0])
-plt.imshow(magnitude, cmap='gray')
-plt.colorbar()
-plt.title('Magnitudine dell Ultima Matrice')
-plt.show()
 
 # Visualizza le curvelet
 fig_axes = curveshow(logo_c, kwargs_imshow=dict(extent=[0, 1, 1, 0]))
-#plt.show()
+plt.show()

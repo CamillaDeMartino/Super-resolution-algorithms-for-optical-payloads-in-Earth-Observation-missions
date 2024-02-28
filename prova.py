@@ -429,6 +429,9 @@ if images_lr is not None:
 
 plt.show()
 
+cv2.imwrite('LR_1.png', images_lr[0])
+cv2.imwrite('LR_2.png', images_lr[3])
+
 
 # Aggiungi rumore alle immagini LR
 noisy_images_lr = add_noise(images_lr) 
