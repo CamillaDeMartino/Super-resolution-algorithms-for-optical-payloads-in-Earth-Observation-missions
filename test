@@ -289,3 +289,18 @@ print(matrice_sovrapposta)
 print("\nMatrice HR:")
 print(HR)
 
+
+
+
+#D - Up-Sampling
+def up_sampling(image_rotated, HR):
+    
+    f = 2
+
+    m,n = HR.shape
+    m_new = m*f
+    n_new = n*f
+    img_upsampled = cv2.resize(image_rotated, (m_new, n_new), interpolation=cv2.INTER_NEAREST)
+    
+
+    return img_upsampled

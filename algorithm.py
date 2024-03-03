@@ -6,7 +6,6 @@ from curvelops import FDCT2D
 from curvelops.plot import curveshow
 from itertools import combinations, cycle
 
-
 #A - Campionamento Quincunx 
 def quincunx_sampling(image):
 
@@ -55,6 +54,7 @@ def combine_frames(I1, I2):
 def rotate_quincunx_image(image):
 
     rows, columns = image.shape
+    # Passo di Up-sampling
     new=np.zeros((rows*2,columns*2))
     
     for j in range(columns):
@@ -65,19 +65,22 @@ def rotate_quincunx_image(image):
     return new
 
 
-#D - Up-Sampling
-def up_sampling(image_rotated, HR):
-    
-    f = 2
+#D - Missing-Pixel
+def find_missing_pixels(image):
+     
+    # TRova le coordinate uguali a zero dell'immagine prima della rotazione
+    zero_coordinates = np.argwhere(image == 0)
 
-    m,n = HR.shape
-    m_new = m*f
-    n_new = n*f
-    img_upsampled = cv2.resize(image_rotated, (m_new, n_new), interpolation=cv2.INTER_NEAREST)
-    
-    #img_upsampled = np.kron(image_rotated, np.ones((2, 2)))
+    rows, columns = image.shape
 
-    return img_upsampled
+    missing_pixels = []
+    for coord in zero_coordinates:
+        i, j = coord
+        i_n = i + j
+        j_n = columns - j + i
+        missing_pixels.append((i_n, j_n))
+          
+    return missing_pixels
 
 
 
@@ -92,7 +95,7 @@ def fdct(image):
 
     # Applica la trasformata di curvelet 2D all'immagine
     C2D = FDCT2D(imag_swap.shape, nbscales=4, nbangles_coarse=4, allcurvelets=False)
-
+    
     # Estrai i coefficienti di curvelet
     coeff = C2D.struct(C2D @ imag_swap)
     lunghezza_lista = len(coeff)
@@ -114,19 +117,6 @@ def fdct(image):
 
 
 #F - Interpolation
-def find_missing_pixels(image, zero):
-    
-    # Identifica le coordinate dei pixel mancanti
-    missing_pixels = []
-    rows, cols = image.shape[:2]
-    for y in range(rows):
-        for x in range(cols):
-            # Verifica se il pixel è mancante (0)
-            if np.abs(image[y, x]) < zero:
-                missing_pixels.append((x, y))
-
-             
-    return missing_pixels
 
 
 def divide_into_groups(selected_coefficients):
@@ -154,7 +144,7 @@ def divide_into_groups(selected_coefficients):
     return groups
 
 
-def group_coefficients(image, pixel, zero):
+def group_coefficients(image, pixel, missing_pixels):
     
     # Per ogni pixel mancante
     x, y = pixel
@@ -272,19 +262,15 @@ def interpolate_border_group(groups):
 
 
 
-def interpolation(image):
+def interpolation(image, missing_pixels):
 
-    #Valore dei pixel più vicini allo zero
-    zero = 1e-2
-
+    
     groups = []
     strategy = "gradiente"
     
     count1 = 0
     count2 = 0
 
-    # Trova i pixel mancanti
-    missing_pixels = find_missing_pixels(image, zero)
     print("n. Pixel == 0: ", len(missing_pixels))
 
     """print("Pixel: ", abs(image[767, 767]))
@@ -337,6 +323,8 @@ def interpolation(image):
     
         
 
+
+# FDCT inversa
 
 
 #--------------------MAIN-----------------------
@@ -416,21 +404,17 @@ print("\nReal Pixel[0][768] ", np.real(HR_tras[0][768]))
 print("Imag Pixel[0][768] ", np.imag(HR_tras[0][768]))
 print("Abs Pixel[0][768] ", np.abs(HR_tras[0][768]))
 
-x, y = HR_tras.shape
-x = x-1
-y = y-1
-metax, metay = x//2, y//2
-print("Meta: ", metax, metay)
 
 
 
 # Interpolazione
-HR_intrp = interpolation(HR_tras)
+missing_pixels = find_missing_pixels(HR)
+HR_intrp = interpolation(HR_tras, missing_pixels)
 
 
 
 # Calcola l'inversa della trasformata delle curvelet per ricostruire l'immagine originale
-FDCT_inv = HR_intrp.H @ c
+#FDCT_inv = HR_intrp.H @ c
 
 # Verifica che l'immagine originale e quella ricostruita siano simili entro una certa tolleranza
 #np.testing.assert_allclose(HR_upsampling, FDCT_inv, rtol=1e-6, atol=1e-8)
