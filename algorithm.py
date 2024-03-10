@@ -2,9 +2,9 @@ import cv2
 import numpy as np
 import imutils
 from matplotlib import pyplot as plt
-from curvelops import FDCT2D
-from curvelops.plot import curveshow
+from curvelops import fdct2d_wrapper as ct
 from itertools import combinations, cycle
+import multiprocessing
 
 #A - Campionamento Quincunx 
 def quincunx_sampling(image):
@@ -67,58 +67,95 @@ def rotate_quincunx_image(image):
 
 #D - Missing-Pixel
 def find_missing_pixels(image):
-     
-    # TRova le coordinate uguali a zero dell'immagine prima della rotazione
-    zero_coordinates = np.argwhere(image == 0)
 
     rows, columns = image.shape
 
+    # Trova le coordinate uguali a zero dell'immagine prima della rotazione
     missing_pixels = []
-    for coord in zero_coordinates:
-        i, j = coord
-        i_n = i + j
-        j_n = columns - j + i
-        missing_pixels.append((i_n, j_n))
+    for i in range(rows):
+        for j in range(int(columns/2)):
+            if np.remainder(i,2)==0:
+                i_new, j_new = i, j*2+1
+                missing_pixels.append((i_new + j_new, columns - i_new + j_new))
+
+            if np.remainder(i,2)==1:
+                i_new, j_new = i, j*2
+                missing_pixels.append((i_new + j_new, columns - i_new + j_new))
+
           
     return missing_pixels
 
 
+# Known-Pixel
+def find_known_pixels(image):
+    
+    rows, columns = image.shape
+
+    # Trova le coordinate diverse da zero dell'immagine prima della rotazione
+    known_pixels = []
+    for i in range(rows):
+        for j in range(int(columns/2)):
+            if np.remainder(i,2)==0:
+                i_new, j_new = i, j*2
+                known_pixels.append((i_new + j_new, columns - i_new + j_new))
+
+            if np.remainder(i,2)==1:
+                i_new, j_new = i, j*2+1
+                known_pixels.append((i_new + j_new, columns - i_new + j_new))  
+
+          
+    return known_pixels
+
+def calculate_distance(pixel, group, known_pixels):
+    x,y = pixel
+    min_distance = float('inf')  # Inizializziamo la distanza minima con un valore infinito
+    closest_pixel = None  # Inizializziamo il pixel più vicino come None
+    
+    # Copia la lista dei known_pixels
+    remaining_known_pixels = known_pixels.copy()
+    # Rimuovi i pixel già presenti nel gruppo dalla lista dei known_pixels
+    for group_pixel in group:
+        if group_pixel in remaining_known_pixels:
+            remaining_known_pixels.remove(group_pixel)
+
+    for dx in range(-3, 4):
+        for dy in range(-3, 4):
+            nx, ny = x + dx, y + dy
+            
+            # Verifichiamo se il pixel non è nell'elenco dei pixel aggiunti e se è noto
+            if (nx, ny) in remaining_known_pixels:
+                
+                # Calcoliamo la distanza euclidea dal pixel corrente a (x, y)
+                distance = np.sqrt((nx - x) ** 2 + (ny - y) ** 2)
+                # Se la distanza è minore della distanza minima attuale, aggiorniamo i valori
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_pixel = (nx, ny)
+
+    return closest_pixel
+
+
 
 #E - Discrete Curvelet Domain 
-def fdct(image):
-    imag_swap = image.swapaxes(0, 1)
+def fdct(image, scale, angles):
 
-    print("Img dims: ", imag_swap.shape)
+    print("Img dims: ", image.shape)
 
-    # Normalizza i valori dei pixel dell'immagine tra 0 e 1
-    imag_swap = imag_swap.astype(float) / 255.0
+    c = ct.fdct2d_forward_wrap(scale, angles, False, image)
+    print("\nLa lista coeff contiene", len(c), "elementi.")
+    print("Dims c[0][0]: ", c[0][0].shape)
+    print("Dims c[1][0]: ", c[1][0].shape)
+    print("Dims c[2][0]: ", c[2][0].shape)
+    print("Dims c[3][0]: ", c[3][0].shape)
 
-    # Applica la trasformata di curvelet 2D all'immagine
-    C2D = FDCT2D(imag_swap.shape, nbscales=4, nbangles_coarse=4, allcurvelets=False)
-    
-    # Estrai i coefficienti di curvelet
-    coeff = C2D.struct(C2D @ imag_swap)
-    lunghezza_lista = len(coeff)
-    print("\nLa lista coeff contiene", lunghezza_lista, "elementi.")
+    print("Angles: ", len(c[3][0]))
 
-    print("Dims prima matrice: ", coeff[0][0].shape)
-    print("Dims seconda matrice: ", coeff[1][0].shape)
-    print("Dims terza matrice: ", coeff[2][0].shape)
-    print("Dims quarta matrice: ", coeff[3][0].shape)
+    return c
 
-    print("Angles: ", len(coeff[3]))
-
-    # Visualizza le curvelet
-    fig_axes = curveshow(coeff, kwargs_imshow=dict(extent=[0, 1, 1, 0]))
-    #plt.show()
-
-    return coeff[3][0]
 
 
 
 #F - Interpolation
-
-
 def divide_into_groups(selected_coefficients):
 
     # Genera tutte le possibili combinazioni di tre coefficienti
@@ -144,93 +181,71 @@ def divide_into_groups(selected_coefficients):
     return groups
 
 
-def group_coefficients(image, pixel, missing_pixels):
+
+def group_coefficients(image, pixel, known_pixels):
     
     # Per ogni pixel mancante
     x, y = pixel
     
     group = []
-    distances = []
     surrounding_coeff = [] 
     
     # Consideriamo i pixel adiacenti al pixel mancante
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
             nx, ny = x + dx, y + dy
-            #print("Intorno: ", abs(image[ny, nx]))
-            #print("Pos: ", nx, " ", ny, "\n")
-
+            
             # Verifichiamo che il pixel sia all'interno dell'immagine
             if 0 <= nx < image.shape[1] and 0 <= ny < image.shape[0]:
-
                 # Se il pixel non è nella lista dei pixel mancanti, lo aggiungiamo al gruppo
-                if np.abs(image[ny, nx]) >= zero and (nx, ny) != (x, y):
-                    #print("Approvato Intorno: ", abs(image[ny, nx]),"\n")
-                    group.append(image[ny, nx])
+                if (nx, ny) in known_pixels:
+                    group.append((nx, ny))
 
-                    # Calcola la distanza euclidea del pixel mancante da questo pixel
-                    distance = np.sqrt((nx - x) ** 2 + (ny - y) ** 2)
-                    #print("Distanza: ", distance)
-                    distances.append(distance)
-            
-    #print("Grandezza gruppo: ", len(group))
+    surrounding_coeff = group[:]  
 
     # Se il gruppo è composto da più di 4 coefficienti noti
-    if len(group) > 4:
-        # Ordina i coefficienti per distanza dal pixel mancante e prendi solo i primi 4
-        sorted_group = [x for _, x in sorted(zip(distances, group))][:4]
-        surrounding_coeff = sorted_group
-        #mod_combination = [np.abs(x) for x in sorted_group]
-        #print("Migliori: ", mod_combination)
+    if len(group) == 4:
+        return surrounding_coeff, []
 
-        #Realizza i 4 gruppi da 3 coefficienti con differenti combinazioni
-        groups = divide_into_groups(sorted_group)
-
-        #print("Totale gruppi: ", len(groups))
-
-        return surrounding_coeff, groups
-    elif len(group) == 4:
-        surrounding_coeff = group
+    elif len(group) < 4:     
+        while len(group) < 4:
+            # Cerchiamo il pixel non aggiunto più vicino a (x, y)           
+            closest_pixel = calculate_distance(pixel, group, known_pixels)
+            
+            # Aggiungiamo il pixel più vicino al gruppo e lo aggiungiamo alla lista dei pixel aggiunti
+            group.append(closest_pixel)            
+        
         groups = divide_into_groups(group)
-        
-        #print("Totale gruppi: ", len(groups))
-
-        return surrounding_coeff, groups
-    else:
-        return [], [] #ritorna una lista vuota
-
-
-
-def find_area_type(image, group, pixel, strategy):
-  
-  if strategy == "gradiente":
-    # Calcolo del gradiente per ogni coefficiente
-    gradienti = np.gradient(group)
-    
-    """# Calcolo del gradiente complessivo considerando tutte le componenti spettrali
-    overall_gradient = np.sqrt(sum(np.square(grad) for grad in gradienti))
-        
-    print("grad: ", abs(np.max(overall_gradient)))"""
-    
-    # Se tutti i gradienti sono elevati, il gruppo è su un bordo/linea (True)
-    if 0.07 < abs(np.max(gradienti)) < 0.4 :
-      return True
-    else:
-      return False
-
-  #elif strategy == "mappa":
-    
+       
+        return surrounding_coeff, groups 
     
 
-def interpolate_non_border_group(group):
+def interpolate_non_border_group(group, fdct):
 
-    # Calcola la media aritmetica dei coefficienti nel gruppo
-    interpolated_value = sum(group) / len(group)
+    sum  = 0
+
+    # Calcola la somma dei coefficienti nel gruppo identificandoli in base alle coordinate nell'immagine trasformata
+    for pixel in group:
+        sum += fdct[pixel]
+
+    # Calcola la media
+    interpolated_value = sum / len(group)
     return interpolated_value
 
 
+def std_group(group, image):
+    
+    pixels = []
+    for pixel in group[0]:
+        x, y = pixel
+        pixels.append(image[x, y])
+    
+    
+    std = np.std(pixels)
+    return std
 
-def interpolate_border_group(groups):
+
+def interpolate_border_group(groups, fdct):
 
     # Inizializza la lista dei migliori gruppi e il valore minimo della deviazione standard
     best_groups = []
@@ -238,7 +253,7 @@ def interpolate_border_group(groups):
 
     # Calcola la deviazione standard per ogni gruppo di combinazioni
     for group in groups:
-        std = np.std(group)
+        std = std_group(group, fdct)
         min_std_values.append(std)
     
     # Seleziona i valori delle deviazioni standard minime
@@ -247,84 +262,73 @@ def interpolate_border_group(groups):
     # Seleziona i gruppi corrispondenti ai valori minimi della deviazione standard
     for index in min_std_indices:
         best_groups.append(groups[index])
-    
-    # Inizializza il valore interpolato come zero
-    interpolated_value = 0
-    
+
+     
+    sum_values = 0
     # Interpola il valore del pixel mancante utilizzando la media dei gruppi con deviazione standard minima
     for group in best_groups:
-         for i in range(len(group[0])):  # Iteriamo su ogni elemento della tupla
-            # Somma i valori reali corrispondenti in ciascuna tupla
-            sum_values = sum(value[i].real for value in group)
-            interpolated_value += sum_values / len(group)  # Calcoliamo la media
+         for pixel in group[0]:  # Iteriamo su ogni elemento della tupla
+            # Somma i valori corrispondenti in ciascuna tupla
+            x,y = pixel
+            sum_values += fdct[x, y]
     
+    interpolated_value = sum_values / 9  # Calcoliamo la media
     return interpolated_value
 
 
 
-def interpolation(image, missing_pixels):
+def interpolation(fdct, img_rotate, missing_pixels, known_pixels):
 
-    
-    groups = []
-    strategy = "gradiente"
-    
+
     count1 = 0
     count2 = 0
 
-    print("n. Pixel == 0: ", len(missing_pixels))
-
-    """print("Pixel: ", abs(image[767, 767]))
-    surrounding_coeff, group = group_coefficients(image, [0,763], zero)
-
-    groups.append(group) #op. non necessaria 
-    print("Gruppi tornati: ", len(groups))
-
-    if len(surrounding_coeff ) > 0 : 
-        result = find_area_type(image, surrounding_coeff, [767, 767], strategy)
-        print("Bordi: ", result)"""
-
-    
     for missing_pixel in missing_pixels:
-
+        
         x, y = missing_pixel
 
         #Trova i gruppi intorno ai pixel mancanti
-        surrounding_coeff, group = group_coefficients(image, missing_pixel, zero)
+        surrounding_coeff, group = group_coefficients(img_rotate, missing_pixel, known_pixels)
 
-        groups.append(group) #op. non necessaria 
-
-
-        if len(surrounding_coeff) > 0:
-            # Interpola
-            # Se hai trovato un'area con dei bordi
-            if find_area_type(image, surrounding_coeff, missing_pixel, strategy) :
-                #deviazione standard
-                count1 += 1
-                if len(group) > 0:
-                    interpolated_value = interpolate_border_group(group)
-                else:
-                    interpolated_value = image[y, x]
-            else:
-                #media
-                count2 += 1
-                interpolated_value = interpolate_non_border_group(surrounding_coeff)
-        else:
-            interpolated_value = image[y, x]
+        # Interpola
+        # Se hai trovato un'area con dei bordi
+        if len(surrounding_coeff) < 4:
+            #deviazione standard
+            count1 += 1
+            interpolated_value = interpolate_border_group(group, fdct)
+        elif len(surrounding_coeff) == 4:
+            #media
+            count2 += 1
+            interpolated_value = interpolate_non_border_group(surrounding_coeff, fdct)
+        
 
         # Assegna il valore interpolato al pixel mancante
-    
-        image[y, x] = interpolated_value
+        fdct[x, y] = interpolated_value
 
-    print("\nGruppi: ", len(groups))
     print("\nBordi: ", count1)
     print("No Bordi: ", count2)
 
-    return image
+    return fdct
     
         
-
-
 # FDCT inversa
+def ifdct(image, fdct, scale, angle):
+    xinv = ct.fdct2d_inverse_wrap( *image.shape, scale, angle, False, fdct)
+    return xinv
+
+
+
+# A-Rotate
+def a_rotate(image):
+    r, c = image.shape 
+    rows, columns = r//2, c//2
+    a_rotate =np.zeros((rows, columns))
+
+    for j in range(columns):
+        for i in range(rows):
+            a_rotate[j, i] = image[i+j,columns-j+i]
+    
+
 
 
 #--------------------MAIN-----------------------
@@ -382,47 +386,31 @@ plt.imshow(HR_rotate, cmap='gray')
 plt.title('HR Rotated')
 plt.show()
 
-#HR_upsampling = up_sampling(HR_rotate, HR)
-#print("\nSize ups: ", HR_rotate.shape)
-
-
-plt.figure(figsize=(12, 8))
-#plt.imshow(HR_upsampling, cmap='gray')
-plt.title('HR Up-Sampling')
-#plt.show()
-
-
-
-# Calcola la trasformata curvelet discreta
-
-HR_tras = fdct(HR_rotate)
-print("\nReal Pixel[0][0] ", np.real(HR_tras[0][0]))
-print("Imag Pixel[0][0] ", np.imag(HR_tras[0][0]))
-print("Abs Pixel[0][0] ", np.abs(HR_tras[0][0]))
-
-print("\nReal Pixel[0][768] ", np.real(HR_tras[0][768]))
-print("Imag Pixel[0][768] ", np.imag(HR_tras[0][768]))
-print("Abs Pixel[0][768] ", np.abs(HR_tras[0][768]))
-
-
-
 
 # Interpolazione
 missing_pixels = find_missing_pixels(HR)
-HR_intrp = interpolation(HR_tras, missing_pixels)
+known_pixels = find_known_pixels(HR)
 
+scale = 4
+angles = 4
+coeff = fdct(HR_rotate, scale, angles)
+matrix = len(coeff)-1
 
+#image_interp = interpolation(coeff[matrix][0], HR_rotate, missing_pixels, known_pixels)
+# Esegui l'interpolazione dei pixel mancanti in parallelo
+pool = multiprocessing.Pool()
+interpolated_coefficients = pool.starmap(interpolation, [(coeff[matrix][0], HR_rotate, missing_pixels, known_pixels)])
+pool.close()
+pool.join()
+coeff[matrix][0] = interpolated_coefficients[0]
 
-# Calcola l'inversa della trasformata delle curvelet per ricostruire l'immagine originale
-#FDCT_inv = HR_intrp.H @ c
+#coeff[matrix][0] = image_interp
 
-# Verifica che l'immagine originale e quella ricostruita siano simili entro una certa tolleranza
-#np.testing.assert_allclose(HR_upsampling, FDCT_inv, rtol=1e-6, atol=1e-8)
-#np.testing.assert_allclose(HR_upsampling, FDCT_inv)
+inverse = ifdct(HR_rotate, coeff, scale, angles)
 
-# Calcola l'errore quadratico medio (RMSE)
-#rmse = np.sqrt(np.mean((HR_upsampling - FDCT_inv)**2))
+plt.figure(figsize=(12, 8))
+plt.imshow(np.abs(inverse), cmap='gray')
+plt.title('inv')
+plt.show()
 
-# Stampa il RMSE
-#print("RMSE:", rmse)
-
+final_image = a_rotate(np.abs(inverse))
