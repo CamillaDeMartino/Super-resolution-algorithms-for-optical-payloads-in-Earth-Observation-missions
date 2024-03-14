@@ -6,42 +6,8 @@ from curvelops import FDCT2D
 from curvelops.plot import curveshow
 from itertools import combinations, cycle
 from curvelops import fdct2d_wrapper as ct
-import multiprocessing
+from joblib import Parallel, delayed
 
-# Matrice 4x4
-matrice4x4 = np.array([[1, 2, 3, 4], 
-                        [5, 6, 7, 8], 
-                        [9, 10, 11, 12],
-                        [13, 14, 15, 16]])
-
-# Matrice 6x6
-matrice = np.array([[1, 2, 3, 4, 5, 6],
-                    [7, 8, 9, 10, 11, 12],
-                    [13, 14, 15, 16, 17, 18], 
-                    [19, 20, 21, 22, 23, 24], 
-                    [25, 26, 27, 28, 29, 30], 
-                    [31, 32, 33, 34, 35, 36]])
-
-# Matrice 1
-matrice1 = np.array([[1, 2],
-                    [3, 4]])
-
-# Matrice 2
-matrice2 = np.array([[5, 6],
-                    [7, 8]])
-
-matrice3 = np.array([[9, 10], 
-                     [11, 12]])
-
-matrice4 = np.array([[13, 14], 
-                     [15, 16]])
-
-# Stampa delle matrici
-print("Matrice 1:")
-print(matrice1)
-print("\nMatrice 2:")
-print(matrice2)
-          
 
 
 #D - Missing-Pixel
@@ -113,6 +79,7 @@ def calculate_distance(pixel, group, known_pixels):
                     closest_pixel = (nx, ny)
 
     return closest_pixel
+
 
 #E - Discrete Curvelet Domain 
 def fdct(image, scale, angles):
@@ -192,9 +159,11 @@ def group_coefficients(image, pixel, known_pixels):
         
         while len(group) < 4:
             # Cerchiamo il pixel non aggiunto più vicino a (x, y)
-            
-            closest_pixel = calculate_distance(pixel, group, known_pixels)
-            
+            closest_pixel = calculate_distance(pixel, group, known_pixels)  
+
+            # Esegue il calcolo parallelo della distanza per ogni pixel mancante
+            #closest_pixel = parallelize_distance_calculation(pixel, group, known_pixels)
+    
             # Aggiungiamo il pixel più vicino al gruppo e lo aggiungiamo alla lista dei pixel aggiunti
             group.append(closest_pixel)
             print("aggiunto pixel: ", closest_pixel)
@@ -314,90 +283,137 @@ def ifdct(image, fdct, scale, angle):
     return xinv
 
 
+
+def interpolation_wrapper(args):
+    fdct, img_rotate, missing_pixels, known_pixels = args
+    return interpolation(fdct.copy(), img_rotate.copy(), missing_pixels.copy(), known_pixels.copy())
+
+
 #-------------------------Algoritmo 2 ---------------------------------------------------
+def main():
+
+    # Matrice 4x4
+    matrice4x4 = np.array([[1, 2, 3, 4], 
+                            [5, 6, 7, 8], 
+                            [9, 10, 11, 12],
+                            [13, 14, 15, 16]])
+
+    # Matrice 6x6
+    matrice = np.array([[1, 2, 3, 4, 5, 6],
+                        [7, 8, 9, 10, 11, 12],
+                        [13, 14, 15, 16, 17, 18], 
+                        [19, 20, 21, 22, 23, 24], 
+                        [25, 26, 27, 28, 29, 30], 
+                        [31, 32, 33, 34, 35, 36]])
+
+    # Matrice 1
+    matrice1 = np.array([[1, 2],
+                        [3, 4]])
+
+    # Matrice 2
+    matrice2 = np.array([[5, 6],
+                        [7, 8]])
+
+    matrice3 = np.array([[9, 10], 
+                        [11, 12]])
+
+    matrice4 = np.array([[13, 14], 
+                        [15, 16]])
+
+    # Stampa delle matrici
+    print("Matrice 1:")
+    print(matrice1)
+    print("\nMatrice 2:")
+    print(matrice2)
+
+    # Calcola le coordinate xh, yh per la griglia ad alta risoluzione
+    xh1, yh1 = np.meshgrid(np.arange(matrice1.shape[1]), np.arange(matrice1.shape[0]))
+    xh2, yh2 = np.meshgrid(np.arange(matrice2.shape[1]), np.arange(matrice2.shape[0]))
+
+    # Calcola le coordinate x1, y1, x2, y2 come specificato nell'equazione
+    x1 = 2 * xh1 + 1
+    y1 = 2 * yh1 + 1
+    x2 = 2 * xh2
+    y2 = 2 * yh2
+
+    # Calcola le dimensioni della griglia Quincunx
+    rows, cols = matrice1.shape
+
+    # Inizializza l'immagine risultante
+    H = np.zeros((2 * rows, 2 * cols), dtype=np.uint8)
+
+    # Trova le coordinate dove i pixel sono rimasti uguali a zero
+
+    # Posizionare i pixel a bassa risoluzione sulla griglia ad alta risoluzione
+    H[y1, x1] = matrice2
+    H[y2, x2] = matrice1
+
+    # Calcolare l'immagine risultante (può essere una media, una somma, ecc.)
+    result_image = H  
+
+    zero_coordinates = np.argwhere(H == 0)
+
+    print("Result:\n", result_image)
+
+    rows, columns = result_image.shape
+
+
+    new=np.zeros((rows*2,columns*2))
+
+    for j in range(columns):
+        for i in range(rows):
+            new[i+j,columns-j+i]=result_image[j,i]
+        
+
+    print("Rotate: \n", new)
+
+
+    scale = 4
+    angles = 4
+    coeff = fdct(new, scale, angles)
+    matrix = len(coeff)-1
+
+    missing_pixels = find_missing_pixels(H)
+    known_pixels = find_known_pixels(H)
+    print("Coordinate 0 nuove :\n ", missing_pixels)
+    print("Coordinate !=0:\n ", known_pixels)
+
+
+    #image_interp = interpolation(coeff[matrix][0], new, missing_pixels, known_pixels)
+    # Esegui l'interpolazione dei pixel mancanti in parallelo
+    interpolated_coefficients = Parallel(n_jobs=-1)(
+    delayed(interpolation_wrapper)(args) for args in [(coeff[matrix][0], new, missing_pixels, known_pixels)]
+    )
     
-# Calcola le coordinate xh, yh per la griglia ad alta risoluzione
-xh1, yh1 = np.meshgrid(np.arange(matrice1.shape[1]), np.arange(matrice1.shape[0]))
-xh2, yh2 = np.meshgrid(np.arange(matrice2.shape[1]), np.arange(matrice2.shape[0]))
-
-# Calcola le coordinate x1, y1, x2, y2 come specificato nell'equazione
-x1 = 2 * xh1 + 1
-y1 = 2 * yh1 + 1
-x2 = 2 * xh2
-y2 = 2 * yh2
-
-# Calcola le dimensioni della griglia Quincunx
-rows, cols = matrice1.shape
-
-# Inizializza l'immagine risultante
-H = np.zeros((2 * rows, 2 * cols), dtype=np.uint8)
-
-# Trova le coordinate dove i pixel sono rimasti uguali a zero
-
-# Posizionare i pixel a bassa risoluzione sulla griglia ad alta risoluzione
-H[y1, x1] = matrice2
-H[y2, x2] = matrice1
-
-# Calcolare l'immagine risultante (può essere una media, una somma, ecc.)
-result_image = H  
-
-zero_coordinates = np.argwhere(H == 0)
-
-print("Result:\n", result_image)
-
-rows, columns = result_image.shape
 
 
-new=np.zeros((rows*2,columns*2))
+    print("Prova, ", interpolated_coefficients[0][3,7])
+    coeff[matrix][0] = interpolated_coefficients[0]
 
-for j in range(columns):
-    for i in range(rows):
-        new[i+j,columns-j+i]=result_image[j,i]
+
+    inverse = ifdct(new, coeff, scale, angles)
+
+    plt.figure(figsize=(12, 8))
+    plt.imshow(np.real(inverse), cmap='gray')
+    plt.title('inv')
+    #plt.show()
+
+    #print("Inv: ", np.abs(inverse))
+    print("Len: ", inverse.shape)
+
+    print("Final befor rotate: ", (inverse[3,7]))
+
+    r, c = inverse.shape 
+    a_rotate = np.zeros((r//2,c//2))
+
+    for j in range(c//2):
+        for i in range(r//2):
+            a_rotate[j, i] = np.abs(inverse[i+j,c//2-j+i])
+        
+
+    print("ARotate: \n", a_rotate)
     
 
-print("Rotate: \n", new)
-
-
-scale = 4
-angles = 4
-coeff = fdct(new, scale, angles)
-matrix = len(coeff)-1
-
-missing_pixels = find_missing_pixels(H)
-known_pixels = find_known_pixels(H)
-print("Coordinate 0 nuove :\n ", missing_pixels)
-print("Coordinate !=0:\n ", known_pixels)
-
-
-
-#image_interp = interpolation(coeff[matrix][0], new, missing_pixels, known_pixels)
-# Esegui l'interpolazione dei pixel mancanti in parallelo
-pool = multiprocessing.Pool()
-interpolated_coefficients = pool.starmap(interpolation, [(coeff[matrix][0], new, missing_pixels, known_pixels)])
-pool.close()
-pool.join()
-print("Prova, ", interpolated_coefficients[0][3,7])
-coeff[matrix][0] = interpolated_coefficients[0]
-
-
-inverse = ifdct(new, coeff, scale, angles)
-
-plt.figure(figsize=(12, 8))
-plt.imshow(np.real(inverse), cmap='gray')
-plt.title('inv')
-#plt.show()
-
-#print("Inv: ", np.abs(inverse))
-print("Len: ", inverse.shape)
-
-print("Final befor rotate: ", (inverse[3,7]))
-
-r, c = inverse.shape 
-a_rotate = np.zeros((r//2,c//2))
-
-for j in range(c//2):
-    for i in range(r//2):
-        a_rotate[j, i] = np.abs(inverse[i+j,c//2-j+i])
-    
-
-print("ARotate: \n", a_rotate)
+if __name__ == "__main__":
+    main()
+        
