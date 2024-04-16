@@ -1,17 +1,17 @@
 import cv2
 import numpy as np
-import imutils
 from matplotlib import pyplot as plt
 from curvelops import fdct2d_wrapper as ct
 from itertools import combinations, cycle
 from joblib import Parallel, delayed
+import glymur as gly 
 
 
 # Ottieni una porzione dell'immagine (16x16)
 def cut_image(image):
     
     # Larghezza della porzione da estrarre
-    dimensione_riquadro = 16
+    dimensione_riquadro = 8
 
     x = 300
     y = 400
@@ -25,10 +25,10 @@ def cut_image(image):
 
 # Esegui lo slicing delle 2 sottoporzioni
 def subimage(image):
-    rows, columns =  image.shape
+    rows, columns =  image.shape[:2]
 
-    hr_1 = image[0:rows, 0:columns]               # inizia da (0,0) e si estende fino a (768, 768)
-    hr_2 = image[0:rows, 1:columns+1]
+    hr_1 = image[0:rows-1, 0:columns-1]               
+    hr_2 = image[1:rows, 1:columns]
  
     return hr_1, hr_2
 
@@ -38,7 +38,7 @@ def subimage(image):
 def low_resolution(images_hr, M):
     images_lr = []
     for image_hr in images_hr:
-        rows, columns =  image_hr.shape
+        rows, columns =  image_hr.shape[:2]
 
         # Creazione di un'immagine vuota LR
         image_lr = np.zeros_like(image_hr[::M, ::M])
@@ -59,7 +59,45 @@ def low_resolution(images_hr, M):
 
     return images_lr[0], images_lr[1]
 
+def down_sampling(image):
+   
+    # Fattore down-sampling 
+    f = 2
 
+    m,n = image.shape[:2]
+    m_new = int(m/f)
+    n_new = int(n/f)
+
+    # Crea matrice di zeri per la matrice di sovracampionamento 
+    img_downsampled1 = np.zeros((m_new, n_new), dtype=np.uint16) 
+    img_downsampled2 = np.zeros((m_new, n_new), dtype=np.uint16) 
+    for i in range(m_new): 
+        for j in range(n_new): 
+            img_downsampled1[i, j] = int(image[2*i:2*i+1, 2*j:2*j+1].mean())
+            img_downsampled2[i, j] = int(image[2*i+1:2*i+2, 2*j+1:2*j+2].mean())
+
+
+    return img_downsampled1,img_downsampled2
+
+def down_sampling2(image):
+   
+    # Fattore down-sampling 
+    f = 2
+
+    m,n = image.shape[:2]
+    m_new = int(m/f)
+    n_new = int(n/f)
+
+    # Crea matrice di zeri per la matrice di sovracampionamento 
+    img_downsampled1 = np.zeros((m_new, n_new), dtype=np.uint16) 
+    img_downsampled2 = np.zeros((m_new, n_new), dtype=np.uint16) 
+    for i in range(m_new): 
+        for j in range(n_new): 
+            img_downsampled1[i, j] = int(image[2*i:2*i+1, 2*j:2*j+1].mean())
+            img_downsampled2[i, j] = int(image[2*i+1:2*i+2, 2*j+1:2*j+2].mean())
+
+
+    return img_downsampled1
 
 
 #B - Campionamento Quincunx - Combinare frame I1 e I2 
@@ -76,10 +114,10 @@ def quincunx_sampling(I1, I2):
     y2 = 2 * yh
 
     # Calcola le dimensioni della griglia Quincunx
-    rows, cols = I1.shape
+    rows, cols = I1.shape[:2]
 
     # Inizializza l'immagine risultante
-    H = np.zeros((2 * rows, 2 * cols), dtype=np.uint8)
+    H = np.zeros((2 * rows, 2 * cols), dtype=np.uint16)
 
     # Posizionare i pixel a bassa risoluzione sulla griglia ad alta risoluzione
     H[y1, x1] = I2
@@ -96,13 +134,14 @@ def quincunx_sampling(I1, I2):
 #C - Rotate image by 45 degree
 def rotate_quincunx_image(image):
 
-    rows, columns = image.shape
+    rows, columns = image.shape[:2]
     # Passo di Up-sampling
-    new=np.zeros((rows*2,columns*2), dtype=image.dtype)
-    
+    #new=np.zeros((rows*2,columns*2), dtype=image.dtype)
+    new=np.zeros((rows*2,columns*2), dtype=np.uint16)
+
     for j in range(columns):
         for i in range(rows):
-            new[i+j,columns-j+i]=image[j,i]
+            new[i+j,columns-j+i]=image[j,i] ##
     
 
     return new
@@ -111,7 +150,7 @@ def rotate_quincunx_image(image):
 #D - Missing-Pixel
 def find_missing_pixels(image):
 
-    rows, columns = image.shape
+    rows, columns = image.shape[:2]
 
     # Trova le coordinate uguali a zero dell'immagine prima della rotazione
     missing_pixels = []
@@ -132,7 +171,7 @@ def find_missing_pixels(image):
 # Known-Pixel
 def find_known_pixels(image):
     
-    rows, columns = image.shape
+    rows, columns = image.shape[:2]
 
     # Trova le coordinate diverse da zero dell'immagine prima della rotazione
     known_pixels = []
@@ -227,7 +266,7 @@ def group_coefficients(image, pixel, known_pixels):
     
     # Per ogni pixel mancante
     x, y = pixel
-    
+
     group = []
     surrounding_coeff = [] 
     
@@ -238,13 +277,21 @@ def group_coefficients(image, pixel, known_pixels):
             
             # Verifichiamo che il pixel sia all'interno dell'immagine
             if 0 <= nx < image.shape[1] and 0 <= ny < image.shape[0]:
+                if x == 1 and y == 65:
+                    print("Pixel pos: ", nx, " ", ny)
+
                 # Se il pixel non è nella lista dei pixel mancanti, lo aggiungiamo al gruppo
                 if (nx, ny) in known_pixels:
+                    if x == 1 and y == 65:
+                        print("Approvato val: ", image[nx, ny],"\n")
                     group.append((nx, ny))
 
-    surrounding_coeff = group[:]  
+    surrounding_coeff = group[:]
+    if x == 1 and y == 65:
+        print("Grandezza gruppo: ", len(group))
+        print("Surrounding : ", len(surrounding_coeff))
 
-    # Se il gruppo è composto da più di 4 coefficienti noti
+    # Se il gruppo è composto da 4 coefficienti noti allora non abbiamo bisogno di trovarne altri
     if len(group) == 4:
         return surrounding_coeff, []
 
@@ -254,8 +301,8 @@ def group_coefficients(image, pixel, known_pixels):
             closest_pixel = calculate_distance(pixel, group, known_pixels)
             
             # Aggiungiamo il pixel più vicino al gruppo e lo aggiungiamo alla lista dei pixel aggiunti
-            group.append(closest_pixel)            
-        
+            group.append(closest_pixel)   
+
         groups = divide_into_groups(group)
        
         return surrounding_coeff, groups 
@@ -267,16 +314,22 @@ def interpolate_non_border_group(group, fdct):
 
     # Calcola la somma dei coefficienti nel gruppo identificandoli in base alle coordinate nell'immagine trasformata
     for pixel in group:
+        #print("fdct pixel: ", fdct[pixel])
         sum += fdct[pixel]
 
     # Calcola la media
     interpolated_value = sum / len(group)
+    #print("Interp: ", interpolated_value)
+
     return interpolated_value
 
 
-def std_group(group, image):
-    
+def std_group(group, image, missing_pixel):
+    x, y = missing_pixel
+   
     pixels = []
+    if x == 1 and y == 65:
+        print("Gr: ", group)
     for pixel in group[0]:
         x, y = pixel
         pixels.append(image[x, y])
@@ -286,15 +339,17 @@ def std_group(group, image):
     return std
 
 
-def interpolate_border_group(groups, fdct):
-
+def interpolate_border_group(groups, fdct, missing_pixel):
+    x, y = missing_pixel
     # Inizializza la lista dei migliori gruppi e il valore minimo della deviazione standard
     best_groups = []
     min_std_values = []
 
     # Calcola la deviazione standard per ogni gruppo di combinazioni
     for group in groups:
-        std = std_group(group, fdct)
+        std = std_group(group, fdct, missing_pixel)
+        if x == 1 and y == 65:
+            print("std: ", std)
         min_std_values.append(std)
     
     # Seleziona i valori delle deviazioni standard minime
@@ -302,6 +357,8 @@ def interpolate_border_group(groups, fdct):
 
     # Seleziona i gruppi corrispondenti ai valori minimi della deviazione standard
     for index in min_std_indices:
+        if x == 1 and y == 65:
+            print("Best groups: ", groups[index])
         best_groups.append(groups[index])
 
      
@@ -318,8 +375,12 @@ def interpolate_border_group(groups, fdct):
     interpolated_values = [sum_values / len(group[0]) for sum_values, group in zip(sum_values_per_group, best_groups)]
     
     # Restituisci la media delle medie dei valori interpolati per tutti i gruppi selezionati
-    return sum(interpolated_values) / len(interpolated_values)
+    interpolated_value = sum(interpolated_values) / len(interpolated_values)
 
+
+    return interpolated_value
+
+    # Altro metodo di interpolazione
     """sum_values = 0
     # Interpola il valore del pixel mancante utilizzando la media dei gruppi con deviazione standard minima
     for group in best_groups:
@@ -347,11 +408,15 @@ def interpolation(fdct, img_rotate, missing_pixels, known_pixels):
         # Interpola
         # Se hai trovato un'area con dei bordi
         if len(surrounding_coeff) < 4:
+            #print("Border Pixel")
+        
             #deviazione standard
             count1 += 1
-            interpolated_value = interpolate_border_group(group, fdct_copy)
+            interpolated_value = interpolate_border_group(group, fdct_copy, missing_pixel)
+            
         elif len(surrounding_coeff) == 4:
             #media
+            #print("No Border Pixel")
             count2 += 1
             interpolated_value = interpolate_non_border_group(surrounding_coeff, fdct_copy)
         
@@ -366,26 +431,20 @@ def interpolation(fdct, img_rotate, missing_pixels, known_pixels):
         
 # FDCT inversa
 def ifdct(image, fdct, scale, angle):
+    matrix = len(fdct) - 1
+    print("IM: ", image.shape)
     xinv = ct.fdct2d_inverse_wrap( *image.shape, scale, angle, False, fdct)
+
     return xinv
 
 
 
-def fill_missing_pixels(fdct_inverse, HR_rotate, missing_pixels):
-    for x, y in missing_pixels:
-        # Otteniamo il valore dalla trasformata inversa FDCT
-        interpolated_value = fdct_inverse[x, y]
-        # Assegniamo il valore alla posizione corrispondente in HR_rotate
-        HR_rotate[x, y] = interpolated_value
-    
-    return HR_rotate
-
-
 # A-Rotate
 def a_rotate(image):
-    r, c = image.shape 
+    r, c = image.shape[:2]
     rows, columns = r//2, c//2
-    a_rotate = np.zeros((rows, columns), dtype=image.dtype)
+    #a_rotate = np.zeros((rows, columns), dtype=image.dtype)
+    a_rotate = np.zeros((rows, columns), dtype=np.uint16)
 
     for j in range(columns):
         for i in range(rows):
@@ -401,113 +460,188 @@ def interpolation_wrapper(args):
 
 
 
+# Restored
+def scale_DN(low_img,restored_image):
+    x,y = low_img.shape[:2]
+    ratios = np.zeros((x,y))
+    lowa = down_sampling2(restored_image)
+    ratios = low_img/lowa
+    print(ratios)
+    upsampled_ratios = np.kron(ratios, np.ones((2, 2)))
+    rescaled = upsampled_ratios*restored_image
+    return rescaled
+
+
+
+#Compressione e decompressione
+def co_decompression(image1, image2, factor):
+    
+    #File1 - compression
+    name_file1='LR1_3.jp2'
+    jp3 = gly.Jp2k(name_file1, data=np.uint16(image1), cratios=[factor])
+    
+    #File2 - compression
+    name_file2='LR2_3.jp2'
+    jp2 = gly.Jp2k(name_file2, data=np.uint16(image2), cratios=[factor])
+
+
+    # Decompression
+    jp1_3 = gly.Jp2k(name_file1)
+    jp2_3 = gly.Jp2k(name_file2)
+
+
+    fullres1 = jp1_3[:]
+    fullres2 = jp2_3[:]
+
+    return fullres1, fullres2
+
 #--------------------MAIN-----------------------
 
 def main():
     
     # Carica un'immagine ad alta risoluzione
-    image_hr = cv2.imread("test_image.png", cv2.IMREAD_GRAYSCALE)
+    image_hr = cv2.imread("/home/camilla/Scrivania/Tesi/Images/Vegetation_Apr_20200409_B4.tif", cv2.IMREAD_GRAYSCALE)
     plt.figure(figsize=(12, 8))
-    plt.imshow(image_hr, cmap='gray')
+    plt.imshow(image_hr, cmap='viridis')
+    plt.colorbar()
     plt.title('Image HR')
     plt.show()
 
-    # Taglia una porzione più piccola
-    image_cut = cut_image(image_hr)
+    # Altro metodo per tagliare una porzione più piccola dell'immagine originale
+    #image_cut = cut_image(image_hr)
+    image_cut = image_hr[64:128, 64:128]
 
     plt.figure(figsize=(12, 8))
-    plt.imshow(image_cut, cmap='gray')
+    plt.imshow(image_cut, cmap='viridis')
+    plt.colorbar()
     plt.title('HR Cut')
     plt.show()
-    print("Sub image size: ", image_cut.shape)
+    print("Sub image size: ", image_cut.shape[:2])
 
     # Ottieni le 2 sottoporzioni
-    sub_images = subimage(image_cut)
-    # Ottieni le due immagini LR
-    I1, I2 = low_resolution(sub_images, 2)
+    #sub_images = subimage(image_cut)
+    sub_images = subimage(image_hr[64:129, 64:129])
 
+    # Ottieni le due immagini LR (2 metodi possibili)
+    #I1, I2 = low_resolution(sub_images, 2)
+    I1, I2 = down_sampling(image_hr[64:128, 64:128])
+
+    I1, I2 = co_decompression(I1, I2, 2)
 
     plt.figure(figsize=(10, 5))
     plt.subplot(1, 2, 1)
-    plt.imshow(I1, cmap='gray')
+    plt.imshow(I1, cmap='viridis')
+    plt.colorbar()
     plt.title('I1')
     plt.axis('off')
 
     plt.subplot(1, 2, 2)
-    plt.imshow(I2, cmap='gray')
+    plt.imshow(I2, cmap='viridis')
+    plt.colorbar()
     plt.title('I2')
     plt.axis('off')
     plt.show()
 
-    print("\nI1 size: ", I1.shape)
-    print("I2 size: ", I2.shape)
+    print("\nI1 size: ", I1.shape[:2])
+    print("I2 size: ", I2.shape[:2])
 
 
     #Combina i due frame LR
     HR = quincunx_sampling(I1, I2)
     plt.figure(figsize=(12, 8))
-    plt.imshow(HR, cmap='gray')
+    plt.imshow(HR, cmap='viridis')
+    plt.colorbar()
     plt.title('Quincunx Sampling')
     plt.show()
-    print("\nQuincunx size: ", HR.shape)
+    print("\nQuincunx size: ", HR.shape[:2])
 
     print("I1 Pixel : \n", I1)
     print("I2 Pixel : \n", I2)
     print("HR Pixel : \n", HR)
 
     HR_rotate = rotate_quincunx_image(HR)
+
     plt.figure(figsize=(12, 8))
-    plt.imshow(HR_rotate, cmap='gray')
+    plt.imshow(HR_rotate, cmap='viridis')
+    plt.colorbar()
     plt.title('HR Rotated')
     plt.show()
 
-    print("\nRotate size: ", HR_rotate.shape)
+    print("\nRotate size: ", HR_rotate.shape[:2])
+    print("R:\n", HR_rotate)
 
     # Interpolazione
     missing_pixels = find_missing_pixels(HR)
     known_pixels = find_known_pixels(HR)
 
-    scale = 4
-    angles = 16
+    scale = 16
+    angles = 64
 
     coeff = fdct(HR_rotate, scale, angles)
     matrix = len(coeff)-1
     plt.figure(figsize=(12, 8))
-    plt.imshow(np.abs(coeff[matrix][0]), cmap='gray')
+    plt.imshow(np.abs(coeff[matrix][0]), cmap='viridis')
+    plt.colorbar()
     plt.title('fdct')
     plt.show()
 
     
-
-    image_interp = interpolation(coeff[matrix][0], HR_rotate, missing_pixels, known_pixels)
+    image_interp = interpolation(coeff[matrix][0].copy(), HR_rotate.copy(), missing_pixels, known_pixels)
     coeff[matrix][0] = image_interp
 
-    # Esegui l'interpolazione dei pixel mancanti in parallelo
+
+    # Esegui l'interpolazione dei pixel mancanti in parallelo (se necessario)
     #interpolated_coefficients = Parallel(n_jobs=-1)(
     #delayed(interpolation_wrapper)(args) for args in [(coeff[matrix][0], HR_rotate, missing_pixels, known_pixels)]
     #)
     #coeff[matrix][0] = interpolated_coefficients[0]
 
-
-    inverse = ifdct(HR_rotate, coeff, scale, angles)
-
+    inverse = ifdct(HR_rotate, coeff.copy(), scale, angles)
+    
     plt.figure(figsize=(12, 8))
-    plt.imshow(np.abs(inverse), cmap='gray')
+    plt.imshow(np.abs(inverse), cmap='viridis')
+    plt.colorbar()
     plt.title('inv')
-    plt.show()      
+    #plt.show()      
 
-    fill_image = fill_missing_pixels(np.abs(inverse), HR_rotate, missing_pixels)
-    plt.figure(figsize=(12, 8))
-    plt.imshow(np.abs(fill_image), cmap='gray')
-    plt.title('fill')
+    
+
+    final_image = a_rotate(np.abs(inverse))
+    #plt.figure(figsize=(12, 8))
+    #plt.imshow(final_image, cmap='gray')
+    #plt.title('final_image')
+    #plt.show()
+
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    plt.imshow(final_image, cmap='viridis')
+    plt.colorbar()
+    plt.title('Final')
+    plt.axis('off')
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(image_cut, cmap='viridis')
+    plt.colorbar()
+    plt.title('Original')
+    plt.axis('off')
+    #plt.show()
+
+    #image_restored = restore(I1, final_image, 2)
+    image_restored = scale_DN(I1, final_image)
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    plt.imshow(image_restored, cmap='viridis')
+    plt.colorbar()
+    plt.title('Restored Image')
+    plt.axis('off')
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(image_cut, cmap='viridis')
+    plt.colorbar()
+    plt.title('Original')
+    plt.axis('off')
     plt.show()
-
-    final_image = a_rotate(fill_image)
-    plt.figure(figsize=(12, 8))
-    plt.imshow(final_image, cmap='gray')
-    plt.title('final_image')
-    plt.show()
-
+    
 
 if __name__ == "__main__":
     main()

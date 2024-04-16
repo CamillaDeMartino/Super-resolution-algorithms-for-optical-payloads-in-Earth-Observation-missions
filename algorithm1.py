@@ -33,7 +33,6 @@ def low_resolution(images_hr, M):
     images_lr = []
     for image_hr in images_hr:
         # Creazione di un'immagine vuota LR
-        #image_lr = (image_hr * 255.0 / np.max(image_hr)).astype(np.uint8)
         image_lr = np.zeros_like(image_hr[::M, ::M])
 
         # Iterazione su righe e colonne delle immagini HR di passo 2 (M)
@@ -237,59 +236,9 @@ def calculate_distance(keypoints1, keypoints2, matches):
     
     return filter_distances, distances
 
-"""
-def map_images(image_lr, shift_x, shift_y, hr_size):
 
-    # Creazione della matrice di trasformazione per warpAffine
-    matrix = np.float32([[1, 0, shift_x], [0, 1, shift_y]])                 # matrice di traslazione 
-                                                                            # M = | 1   0   shift_x |    -> muoviti sulle x di shift_x  
-                                                                            #     | 0   1   shift_y |    -> muoviti sulle y di shift_y 
-    # Applicazione di warpAffine all'immagine LR
-    mapped_image_hr = cv2.warpAffine(image_lr, matrix, hr_size)             # sposta l'immagine di quanto detto in matrix
-
-    return mapped_image_hr
-
-
-def mapping2(images_lr, M):
-
-    # Inizializza la griglia HR
-    hr_height = images_lr[0].shape[0] 
-    hr_width = images_lr[0].shape[1] 
-    grid = np.zeros((hr_height, hr_width), dtype=np.float32)
-
-    # Lista per immagini mappate
-    hr_images = []  
-
-    # Spostamenti desiderati tra le immagini
-    desired_shifts = [(0, 0), (0, 0.5), (0.5, 0), (0.5, 0.5)]
-
-    # Loop sulle immagini LR
-    for i, image_lr in enumerate(images_lr):
-        # Estrai gli spostamenti desiderati per l'iterazione corrente
-        desired_shift_x, desired_shift_y = desired_shifts[i]
-
-        # Calcolo degli spostamenti desiderati nella griglia HR
-        shift_x = desired_shift_x 
-        shift_y = desired_shift_y
-
-        # Applicazione della mappatura alle immagini LR
-        mapped_image_hr = map_images(image_lr, shift_x, shift_y, (hr_width, hr_height))
-
-        # Aggiungi l'immagine mappata alla lista
-        hr_images.append(mapped_image_hr)
-
-    # Sovrapponi le immagini HR sovrapposte sulla griglia HR
-    for hr_image in hr_images:
-        grid += hr_image
-
-    #return grid/len(hr_images)
-    return grid"""
 
 def mapping(images):
-    #Sovrapposizione a partire dalla metà della prima casella
-    riga_di_partenza = images[0].shape[0] // 2
-    colonna_di_partenza = images[0].shape[1] // 2
-
 
     # Dimensioni della matrice sovrapposta
     righe_sovrapposte = images[0].shape[0] * 2 + 1
@@ -328,34 +277,6 @@ def mapping(images):
     return matrice_sovrapposta
 
 
-"""
-def gridHR2(image):
-    # Taglia l'immagine di sovrapposizione
-    overlapped_image = image[1:image.shape[0], 1:image.shape[1]]
-
-    # Dimensioni dell'immagine HR risultante
-    hr_width = 768
-    hr_height = 768
-
-    # Creare un'immagine HR inizializzata a zero
-    hr_image = np.zeros((hr_height, hr_width))
-
-    # Fattore di sovrapposizione
-    overlapping_factor = 2
-
-    # Iterare attraverso gli indici delle immagini HR
-    for hr_i in range(hr_height):
-        for hr_j in range(hr_width):
-            # Calcolare gli indici corrispondenti nell'immagine LR
-            lr_i = hr_i // overlapping_factor
-            lr_j = hr_j // overlapping_factor
-            
-            # Assegnare il valore del pixel HR in base alla media dei 4 pixel LR sovrapposti
-            hr_image[hr_i, hr_j] = np.mean(overlapped_image[lr_i:lr_i+overlapping_factor, lr_j:lr_j+overlapping_factor])
-
-    # Ora hr_image contiene l'immagine HR risultante
-    return hr_image
-"""
 
 def gridHR(matrice_sovrapposta):
 
@@ -374,16 +295,11 @@ def gridHR(matrice_sovrapposta):
 
 
 
-
-
-
-
-
-
-# IMAGES SELECTION BASED ON SFME -------------------------------------------------------------------------------------------------
+# -------------------------- MAIN ----------------------------------------------------------------
+# IMAGES SELECTION BASED ON SFME ------------------------------------------------------------------
 
 # Carica un'immagine ad alta risoluzione
-image_hr = cv2.imread("test_image.png", cv2.IMREAD_GRAYSCALE)
+image_hr = cv2.imread("/home/camilla/Scrivania/Tesi/Images/test_image.png", cv2.IMREAD_GRAYSCALE)
 
 # Ritaglia il centro dell'immagine 769x769
 center = img_center(image_hr)
@@ -429,8 +345,6 @@ if images_lr is not None:
 
 plt.show()
 
-cv2.imwrite('LR_1.png', images_lr[0])
-cv2.imwrite('LR_2.png', images_lr[3])
 
 
 # Aggiungi rumore alle immagini LR
@@ -498,19 +412,15 @@ print("\n")
 #filter_distance(images_lr)
 
 #MULTI-FRAME IMAGES RECONSTRUCTION ----------------------------------------------------------------------------------------
-for i, image in enumerate(noisy_images_lr):
-    print(image[0][0])
 
 image = mapping(noisy_images_lr)
-print(image[1][1])
 
 
 result_image = gridHR(image)
-print("\n", result_image[0][0]) 
-print("\nShape: ", result_image.shape) 
+print("Shape: ", result_image.shape) 
 
 
-cv2.imwrite('immagine_risultante.png', result_image)
+cv2.imwrite('/home/camilla/Scrivania/Tesi/Images/immagine_risultante.png', result_image)
 
 # Visualizza l'immagine
 plt.figure(figsize=(12, 8))

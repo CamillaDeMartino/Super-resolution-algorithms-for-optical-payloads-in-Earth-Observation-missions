@@ -7,7 +7,14 @@ from curvelops.plot import curveshow
 from itertools import combinations, cycle
 from curvelops import fdct2d_wrapper as ct
 from joblib import Parallel, delayed
-
+from curvelops.utils import (
+    apply_along_wedges,
+    array_split_nd,
+    energy,
+    energy_split,
+    ndargmax,
+    split_nd,
+)
 
 
 #D - Missing-Pixel
@@ -86,12 +93,17 @@ def fdct(image, scale, angles):
 
     print("Img dims: ", image.shape)
 
-    c = ct.fdct2d_forward_wrap(scale, angles, False, image)
+
+    # Esegui la trasformata di curvelet
+    FDCT = FDCT2D(dims=image.shape, nbscales=scale, nbangles_coarse=angles, allcurvelets=False)
+    c = FDCT.struct(FDCT @ image)
+
+    #c = ct.fdct2d_forward_wrap(scale, angles, False, image)
     print("\nLa lista coeff contiene", len(c), "elementi.")
    
     print("Angles: ", len(c[3][0]))
     
-    return c
+    return c, FDCT
 
 
 # F - Interpolazione
@@ -108,14 +120,15 @@ def divide_into_groups(selected_coefficients):
     for i in range(4):
         combination = next(combination_cycle)
         groups[i].append(combination)
-    
+
+    """
     # Stampa gli elementi di ogni gruppo
     for i, group in enumerate(groups):
         print(f"Gruppo {i + 1}:")
         for combination in group:
             mod_combination = [np.abs(x) for x in combination]
             print(mod_combination)
-        print()
+        print()"""
     
     return groups
 
@@ -137,7 +150,7 @@ def group_coefficients(image, pixel, known_pixels):
             
             # Verifichiamo che il pixel sia all'interno dell'immagine
             if 0 <= nx < image.shape[1] and 0 <= ny < image.shape[0]:
-                print("Pixel pos: ", nx, " ", ny)
+                #print("Pixel pos: ", nx, " ", ny)
             
                 # Se il pixel non è nella lista dei pixel mancanti, lo aggiungiamo al gruppo
                 if (nx, ny) in known_pixels:
@@ -149,7 +162,7 @@ def group_coefficients(image, pixel, known_pixels):
     print("Grandezza gruppo: ", len(group))
     print("Surrounding : ", len(surrounding_coeff))
 
-    # Se il gruppo è composto da più di 4 coefficienti noti
+    # Se il gruppo è composto 4 coefficienti noti
     if len(group) == 4:
         
         #print("Totale gruppi: ", len(groups))
@@ -212,7 +225,7 @@ def interpolate_border_group(groups, fdct):
     # Calcola la deviazione standard per ogni gruppo di combinazioni
     for group in groups:
         std = std_group(group, fdct)
-        print("std: ", std, "\n")
+        #print("std: ", std, "\n")
         min_std_values.append(std)
     
     # Seleziona i valori delle deviazioni standard minime
@@ -230,7 +243,7 @@ def interpolate_border_group(groups, fdct):
          for pixel in group[0]:  # Iteriamo su ogni elemento della tupla
             # Somma i valori corrispondenti in ciascuna tupla
             x,y = pixel
-            print("Somma: ", fdct[x,y])
+            #print("Somma: ", fdct[x,y])
             sum_values += fdct[x, y]
     
     print("Sum value: ", (sum_values))
@@ -241,7 +254,7 @@ def interpolate_border_group(groups, fdct):
 
 
 def interpolation(fdct, img_rotate, missing_pixels, known_pixels):
-        
+    
     count1 = 0
     count2 = 0
 
@@ -249,10 +262,10 @@ def interpolation(fdct, img_rotate, missing_pixels, known_pixels):
 
     for missing_pixel in missing_pixels:
         
-        x, y = missing_pixel
+        x, y = missing_pixel 
 
         #Trova i gruppi intorno ai pixel mancanti
-        surrounding_coeff, group = group_coefficients(img_rotate, missing_pixel, known_pixels)
+        surrounding_coeff, group = group_coefficients(img_rotate, (x,y), known_pixels)
 
         # Interpola
         # Se hai trovato un'area con dei bordi
@@ -265,21 +278,34 @@ def interpolation(fdct, img_rotate, missing_pixels, known_pixels):
             count2 += 1
             interpolated_value = interpolate_non_border_group(surrounding_coeff, fdct)
         
+        
 
         # Assegna il valore interpolato al pixel mancante
         print(f"Coord interp: {x}, {y}")
         print("Value not interp: ", (fdct[x, y]))
         fdct[x, y] = interpolated_value
+        print("FDCT interp: ",fdct[x, y] )
+
 
     print("\nBordi: ", count1)
     print("No Bordi: ", count2)
+    print("Prova2, ", img_rotate[0][4])
+    print("Fdct2: ", fdct[0][4])
 
     return fdct
 
 
 # Inverse descrete transform
-def ifdct(image, fdct, scale, angle):
+def ifdct(image, fdct, scale, angle, FDCT):
+    
+    # Convert back to vector
+    #y_one = FDCT.vect(fdct)    
+    
+    #xinv = FDCT.H * y_one
+    #np.testing.assert_array_almost_equal(y_one, xinv, decimal=12)
+    #np.testing.assert_array_almost_equal(2.0 * np.sum(np.abs(y_one - xinv)) / np.sum(np.abs(y_one + xinv)),0.0,  decimal=12)
     xinv = ct.fdct2d_inverse_wrap( *image.shape, scale, angle, False, fdct)
+    
     return xinv
 
 
@@ -297,6 +323,12 @@ def main():
                             [5, 6, 7, 8], 
                             [9, 10, 11, 12],
                             [13, 14, 15, 16]])
+    
+    matrice_2_4x4 = np.array([[17, 18, 19, 20], 
+                            [21, 22, 23, 24], 
+                            [25, 26, 27, 28],
+                            [29, 30, 31, 32]])
+
 
     # Matrice 6x6
     matrice = np.array([[1, 2, 3, 4, 5, 6],
@@ -322,13 +354,13 @@ def main():
 
     # Stampa delle matrici
     print("Matrice 1:")
-    print(matrice1)
+    print(matrice4x4)
     print("\nMatrice 2:")
-    print(matrice2)
+    print(matrice_2_4x4)
 
     # Calcola le coordinate xh, yh per la griglia ad alta risoluzione
-    xh1, yh1 = np.meshgrid(np.arange(matrice1.shape[1]), np.arange(matrice1.shape[0]))
-    xh2, yh2 = np.meshgrid(np.arange(matrice2.shape[1]), np.arange(matrice2.shape[0]))
+    xh1, yh1 = np.meshgrid(np.arange(matrice4x4.shape[1]), np.arange(matrice4x4.shape[0]))
+    xh2, yh2 = np.meshgrid(np.arange(matrice_2_4x4.shape[1]), np.arange(matrice_2_4x4.shape[0]))
 
     # Calcola le coordinate x1, y1, x2, y2 come specificato nell'equazione
     x1 = 2 * xh1 + 1
@@ -337,28 +369,26 @@ def main():
     y2 = 2 * yh2
 
     # Calcola le dimensioni della griglia Quincunx
-    rows, cols = matrice1.shape
+    rows, cols = matrice4x4.shape
 
     # Inizializza l'immagine risultante
-    H = np.zeros((2 * rows, 2 * cols), dtype=np.uint8)
+    H = np.zeros((2 * rows, 2 * cols), dtype=np.float64)
 
     # Trova le coordinate dove i pixel sono rimasti uguali a zero
 
     # Posizionare i pixel a bassa risoluzione sulla griglia ad alta risoluzione
-    H[y1, x1] = matrice2
-    H[y2, x2] = matrice1
+    H[y1, x1] = matrice_2_4x4
+    H[y2, x2] = matrice4x4
 
     # Calcolare l'immagine risultante (può essere una media, una somma, ecc.)
     result_image = H  
-
-    zero_coordinates = np.argwhere(H == 0)
 
     print("Result:\n", result_image)
 
     rows, columns = result_image.shape
 
 
-    new=np.zeros((rows*2,columns*2))
+    new=np.zeros((rows*2,columns*2), dtype=np.float64)
 
     for j in range(columns):
         for i in range(rows):
@@ -369,8 +399,9 @@ def main():
 
 
     scale = 4
-    angles = 4
-    coeff = fdct(new, scale, angles)
+    angles = 16
+    coeff, FDCT = fdct(new, scale, angles)
+
     matrix = len(coeff)-1
 
     missing_pixels = find_missing_pixels(H)
@@ -378,40 +409,38 @@ def main():
     print("Coordinate 0 nuove :\n ", missing_pixels)
     print("Coordinate !=0:\n ", known_pixels)
 
+    image_interp = np.zeros((coeff[matrix][0].shape), np.uint32)
 
-    #image_interp = interpolation(coeff[matrix][0], new, missing_pixels, known_pixels)
+    image_interp = interpolation(coeff[matrix][0].copy(), new.copy(), missing_pixels, known_pixels)
     # Esegui l'interpolazione dei pixel mancanti in parallelo
-    interpolated_coefficients = Parallel(n_jobs=-1)(
-    delayed(interpolation_wrapper)(args) for args in [(coeff[matrix][0], new, missing_pixels, known_pixels)]
-    )
+    #interpolated_coefficients = Parallel(n_jobs=-1)(
+    #delayed(interpolation_wrapper)(args) for args in [(coeff[matrix][0], new, missing_pixels, known_pixels)])
     
+    
+    #print("Prova, ", new[0][4])
+    #coeff[matrix][0] = interpolated_coefficients[0]
+    #coeff[matrix][0] = image_interp
+    
+    
+    inverse = np.zeros((image_interp.shape), np.uint32)
 
-
-    print("Prova, ", interpolated_coefficients[0][3,7])
-    coeff[matrix][0] = interpolated_coefficients[0]
-
-
-    inverse = ifdct(new, coeff, scale, angles)
+    inverse = ifdct(new, coeff.copy(), scale, angles, FDCT)
 
     plt.figure(figsize=(12, 8))
     plt.imshow(np.real(inverse), cmap='gray')
     plt.title('inv')
     #plt.show()
 
-    #print("Inv: ", np.abs(inverse))
-    print("Len: ", inverse.shape)
-
-    print("Final befor rotate: ", (inverse[3,7]))
 
     r, c = inverse.shape 
-    a_rotate = np.zeros((r//2,c//2))
+    a_rotate = np.zeros((r//2,c//2), np.uint32)
 
     for j in range(c//2):
         for i in range(r//2):
             a_rotate[j, i] = np.abs(inverse[i+j,c//2-j+i])
         
-
-    print("ARotate: \n", a_rotate)
+    
+    trasposta = np.transpose(a_rotate)  # o anche: trasposta = matrice.T
     
 
 if __name__ == "__main__":
