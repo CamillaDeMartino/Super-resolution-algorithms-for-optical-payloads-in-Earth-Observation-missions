@@ -1,7 +1,7 @@
 ## Super resolution algorithms for optical payloads in Earth Observation missions
 
 ### Explanation
-Source code and documentation for my master's thesis on super-resolution algorithms for optical payloads in Earth observation missions. Implemented using both spatial and frequency domains, with a focus on curvelet transform application. Part of a NASA-ASI mission to enhance image resolution and quality from Earth observation satellites.
+Source code and documentation for my master's thesis on super-resolution algorithms for optical payloads in Earth observation missions. The proposed approach involves two main methodologies: the first one consists of selecting images obtained by shifting pixels using a specific registration algorithm and iteratively interpolating non-uniformly spaced samples based on gray pixel correction (algorithm1). The second approach employs image registration with sub-pixel shifting and interpolation based on curvelets (algorithm2). "Matrix" refers to the second algorithm applied to numerical matrices. It is used for testing purposes.
 
 ### Installation
 To use this project, follow these steps:
@@ -36,3 +36,5 @@ If you want to cite this project, you can use the following BibTeX entry:
     description = {}
 }
 ```
+### "Future implementations"
+Apply the Daubechies filter to the second algorithm to attenuate interpolation errors along the edges.
