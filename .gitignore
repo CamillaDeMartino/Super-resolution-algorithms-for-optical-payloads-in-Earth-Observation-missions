@@ -1,0 +1,18 @@
+# Python bytecode
+__pycache__/
+
+# Pytest cache
+.pytest_cache/
+
+# VS Code settings
+.vscode/
+
+Images/
+
+# Directory of Dataset not necessary
+Data_Set_B4_256/
+Data_Set_B4_512/
+Data_Set_B5_256/
+Data_Set_B5_512/
+Data_Set_B8_256/
+Data_Set_B8_512/
